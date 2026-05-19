@@ -13,7 +13,7 @@
   /* ═══════════════════════════════════════════════
    *  CONFIG — only edit this section
    * ═══════════════════════════════════════════════ */
-  var SAS_URL      = 'https://YOUR-SAS.vercel.app'; // ← no trailing slash
+  var SAS_URL      = 'https://spc.secureip.org'; // ← no trailing slash
   var BLOCKED_PATH = '/blocked.html';               // your blocked page, or null
   var SHOW_BADGE   = true;                          // session countdown badge
   var OVERLAY_BG   = '#070d1a';                     // overlay background colour
