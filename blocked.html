@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Access Denied — MySite</title>
+  <!-- NO access-guard.js here -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#070d1a;--surface:#0f1c30;--border:#1a2d45;
+      --danger:#f87171;--muted:#64748b;--text:#e2e8f0;--accent:#38bdf8;
+    }
+    html,body{min-height:100%;background:var(--bg);color:var(--text);
+      font-family:'Segoe UI',system-ui,sans-serif;
+      display:flex;align-items:center;justify-content:center;}
+    body::before{content:'';position:fixed;inset:0;
+      background-image:linear-gradient(rgba(248,113,113,0.02) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(248,113,113,0.02) 1px,transparent 1px);
+      background-size:48px 48px;pointer-events:none;}
+    .box{position:relative;z-index:1;text-align:center;padding:48px 40px;
+      background:var(--surface);border:1px solid rgba(248,113,113,0.2);
+      border-radius:16px;max-width:440px;width:90%;}
+    .icon-ring{width:72px;height:72px;border-radius:50%;
+      background:rgba(248,113,113,0.1);border:2px solid var(--danger);
+      display:flex;align-items:center;justify-content:center;
+      margin:0 auto 24px;font-size:28px;
+      box-shadow:0 0 32px rgba(248,113,113,0.2);}
+    h1{font-size:22px;font-weight:700;margin-bottom:8px;color:#fff;}
+    .subtitle{font-size:12px;letter-spacing:3px;color:var(--danger);
+      text-transform:uppercase;margin-bottom:24px;opacity:0.8;}
+    p{font-size:14px;color:var(--muted);line-height:1.8;margin-bottom:28px;}
+    .log-note{display:flex;justify-content:space-between;align-items:center;
+      padding:10px 14px;background:rgba(248,113,113,0.05);
+      border:1px solid rgba(248,113,113,0.12);border-radius:6px;
+      font-size:11px;margin-bottom:28px;}
+    .log-note span:first-child{color:var(--muted);}
+    .log-note span:last-child{color:var(--danger);font-family:monospace;}
+    .btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+    .btn-primary{padding:11px 24px;background:var(--accent);color:#070d1a;
+      border:none;border-radius:7px;font-size:14px;font-weight:600;
+      cursor:pointer;text-decoration:none;transition:opacity 0.2s;}
+    .btn-primary:hover{opacity:0.85;}
+    .btn-outline{padding:11px 22px;background:transparent;
+      border:1px solid var(--danger);color:var(--danger);
+      border-radius:7px;font-size:14px;cursor:pointer;text-decoration:none;
+      transition:background 0.2s,color 0.2s;}
+    .btn-outline:hover{background:var(--danger);color:var(--bg);}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon-ring">✕</div>
+    <div class="subtitle">◈ ACCESS DENIED ◈</div>
+    <h1 id="title">Access Denied</h1>
+    <p id="msg">Your token is invalid or has expired. Please request a new access token.</p>
+    <div class="log-note">
+      <span>This event has been recorded</span>
+      <span>● LOGGED</span>
+    </div>
+    <div class="btn-row">
+      <a id="btn-retry" href="#" class="btn-primary">Request Access →</a>
+      <a href="landing.html" class="btn-outline">← Home</a>
+    </div>
+  </div>
+
+  <script>
+    var GATE = 'https://spc.secureip.org/'; /* ← same URL as access-guard.js */
+
+    var MSGS = {
+      disabled:      ['Access Disabled',   'The administrator has disabled system access. Please try again later.'],
+      invalid_token: ['Invalid Token',     'Your token is invalid or has expired. Please request a new one.'],
+      no_token:      ['No Token',          'No access token was provided. Please start from the gateway.'],
+      verify_error:  ['Verify Error',      'Could not verify your token due to a server error. Please try again.'],
+      rate_limited:  ['Rate Limited',      'Too many requests from your IP address. Please wait a few minutes.'],
+    };
+
+    var reason = new URLSearchParams(location.search).get('reason') || 'invalid_token';
+    var info   = MSGS[reason] || MSGS['invalid_token'];
+
+    document.getElementById('title').textContent = info[0];
+    document.getElementById('msg').textContent   = info[1];
+    document.getElementById('btn-retry').href =
+      GATE + '/api/gateway?return=' + encodeURIComponent(window.location.origin + '/index.html');
+  </script>
+</body>
+</html>
