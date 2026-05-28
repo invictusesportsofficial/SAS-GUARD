@@ -138,10 +138,11 @@
         _overlaySuccess(session);
         return;
       }
-      /* Show password overlay */
-      _overlaySuccess(session, function() {
-        _buildPasswordOverlay(tok, expiry);
-      });
+      /* Password required — morph the verify overlay directly into the
+       * password prompt WITHOUT fading out first. This prevents the page
+       * flashing through during the gap between overlay removal and the
+       * password overlay appearing. */
+      _overlayMorphToPassword(tok, expiry);
     })
     .catch(function() {
       /* Network error checking site password — fail open */
@@ -326,9 +327,155 @@
 
   /**
    * @param {object} session
-   * @param {function} [onRemoved] — called after overlay fades out (for password overlay)
    */
-  function _overlaySuccess(session, onRemoved) {
+
+  /**
+   * Morph the existing verify overlay in-place into a password prompt.
+   * Called instead of _overlaySuccess when a site password is required,
+   * so the overlay NEVER disappears — the page is never visible between
+   * token verification and the password prompt.
+   */
+  function _overlayMorphToPassword(tok, tokenExpiry) {
+    // Swap spinner → lock icon, keeping the overlay fully opaque
+    var spinner = document.getElementById('sas-spinner');
+    var lbl     = document.getElementById('sas-overlay-label');
+
+    if (spinner) {
+      spinner.style.border     = 'none';
+      spinner.style.animation  = 'none';
+      spinner.style.background = 'transparent';
+      spinner.style.boxShadow  = 'none';
+      spinner.style.width      = 'auto';
+      spinner.style.height     = 'auto';
+      spinner.style.marginBottom = '12px';
+      spinner.innerHTML = '<span style="font-size:36px">🔐</span>';
+    }
+    if (lbl) {
+      lbl.textContent = 'Password Required';
+      lbl.style.color = '#e2e8f0';
+      lbl.style.marginBottom = '6px';
+    }
+
+    // Inject the password form below the icon + label
+    var existing = overlay.querySelector('#sas-pw-form');
+    if (existing) return; // already injected
+
+    // Sub-label
+    var sub = document.createElement('div');
+    sub.style.cssText = 'font-size:13px;color:#94a3b8;margin-bottom:20px;font-family:sans-serif';
+    sub.textContent   = 'This site requires an additional password.';
+
+    // Card
+    var card = document.createElement('div');
+    card.id  = 'sas-pw-form';
+    card.style.cssText = [
+      'background:#0d1829', 'border:1px solid #1e3048', 'border-radius:10px',
+      'padding:20px', 'width:100%', 'max-width:340px', 'box-sizing:border-box',
+    ].join(';');
+
+    // Inject shake keyframe if not already present
+    if (!document.getElementById('sas-pw-style')) {
+      var st = document.createElement('style');
+      st.id  = 'sas-pw-style';
+      st.textContent = '@keyframes sas-pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}';
+      document.head.appendChild(st);
+    }
+
+    var labelEl = document.createElement('label');
+    labelEl.style.cssText = 'display:block;font-size:11px;color:#94a3b8;letter-spacing:1px;font-family:monospace;margin-bottom:6px';
+    labelEl.textContent   = 'SITE PASSWORD';
+
+    var inp = document.createElement('input');
+    inp.type        = 'password';
+    inp.placeholder = 'Enter password';
+    inp.setAttribute('autocomplete', 'current-password');
+    inp.style.cssText = [
+      'width:100%', 'background:#111f32', 'border:1px solid #243a56',
+      'color:#e2e8f0', 'padding:10px 14px', 'border-radius:6px',
+      'font-size:14px', 'outline:none', 'box-sizing:border-box',
+      'font-family:inherit', 'transition:border-color .2s',
+    ].join(';');
+    inp.addEventListener('focus', function() { inp.style.borderColor = '#38bdf8'; });
+    inp.addEventListener('blur',  function() { inp.style.borderColor = '#243a56'; });
+
+    var btn = document.createElement('button');
+    btn.textContent  = 'Unlock →';
+    btn.style.cssText = [
+      'width:100%', 'margin-top:12px', 'padding:11px',
+      'background:transparent', 'border:1px solid #38bdf8',
+      'color:#38bdf8', 'border-radius:6px', 'font-size:13px',
+      'font-family:monospace', 'cursor:pointer', 'transition:all .15s',
+    ].join(';');
+    btn.addEventListener('mouseover', function() { if (!btn.disabled) { btn.style.background = '#38bdf8'; btn.style.color = '#070d1a'; } });
+    btn.addEventListener('mouseout',  function() { if (!btn.disabled) { btn.style.background = 'transparent'; btn.style.color = '#38bdf8'; } });
+
+    var err = document.createElement('div');
+    err.style.cssText = [
+      'margin-top:10px', 'padding:8px 12px', 'border-radius:6px',
+      'background:rgba(255,23,68,.08)', 'border:1px solid rgba(255,23,68,.2)',
+      'color:#ff1744', 'font-size:12px', 'font-family:monospace', 'display:none',
+    ].join(';');
+
+    card.appendChild(labelEl);
+    card.appendChild(inp);
+    card.appendChild(btn);
+    card.appendChild(err);
+
+    overlay.appendChild(sub);
+    overlay.appendChild(card);
+
+    function showError(msg) {
+      err.textContent   = '✕ ' + msg;
+      err.style.display = 'block';
+      card.style.animation = 'sas-pw-shake .4s ease';
+      setTimeout(function() { card.style.animation = ''; }, 400);
+      inp.focus();
+    }
+
+    function setLoading(on) {
+      btn.disabled    = on;
+      inp.disabled    = on;
+      btn.textContent = on ? 'Checking…' : 'Unlock →';
+      btn.style.opacity = on ? '0.5' : '1';
+    }
+
+    function attempt() {
+      var pw = inp.value;
+      if (!pw) { inp.focus(); return; }
+      setLoading(true);
+      err.style.display = 'none';
+      fetch(SITE_AUTH_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ domain: DOMAIN, token: tok, password: pw, phase: 'auth' }),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          _saveSiteSession(tokenExpiry);
+          // Now fade the overlay out and reveal the page
+          overlay.style.transition   = 'opacity .35s ease';
+          overlay.style.opacity      = '0';
+          overlay.style.pointerEvents = 'none';
+          setTimeout(_overlayRemove, 370);
+        } else {
+          showError(data.error || 'Wrong password');
+          inp.value = '';
+          setLoading(false);
+        }
+      })
+      .catch(function() {
+        showError('Network error — try again');
+        setLoading(false);
+      });
+    }
+
+    btn.addEventListener('click', attempt);
+    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') attempt(); });
+    setTimeout(function() { inp.focus(); }, 80);
+  }
+
+  function _overlaySuccess(session) {
     var spinner = document.getElementById('sas-spinner');
     var lbl     = document.getElementById('sas-overlay-label');
 
@@ -357,7 +504,6 @@
         overlay.style.pointerEvents = 'none';
         setTimeout(function () {
           _overlayRemove();
-          if (onRemoved) { onRemoved(); return; }
           if (SHOW_BADGE && session) _badge(session);
         }, 420);
       }
