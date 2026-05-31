@@ -89,6 +89,41 @@
    *  Core functions
    * ═══════════════════════════════════════════════════════════ */
 
+
+  /* ═══════════════════════════════════════════════════════════
+   *  Background re-verify polling (every 30s)
+   *  Ensures revoked/expired tokens block the page immediately
+   *  without waiting for the user to navigate away.
+   * ═══════════════════════════════════════════════════════════ */
+  function _startPolling(tok) {
+    var INTERVAL = 30 * 1000; // 30 seconds
+    var timer = setInterval(function () {
+      fetch(VERIFY_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body:    JSON.stringify({ token: tok }),
+      })
+      .then(function (r) {
+        if (!r.ok) {
+          clearInterval(timer);
+          r.json().catch(function(){ return {}; }).then(function(data){
+            _denyAndClear(data.reason || 'session_revoked');
+          });
+        } else {
+          return r.json().then(function (data) {
+            if (!data || !data.success) {
+              clearInterval(timer);
+              _denyAndClear(data.reason || 'session_invalid');
+            }
+          });
+        }
+      })
+      .catch(function () {
+        /* Keep polling on transient network errors — don't block on a blip */
+      });
+    }, INTERVAL);
+  }
+
   /* ── FAIL CLOSED: any non-2xx or network error → blocked ── */
   function _verify(tok) {
     fetch(VERIFY_URL, {
@@ -105,6 +140,7 @@
       return r.json().then(function (data) {
         if (data && data.success) {
           sessionStorage.removeItem(FLAG_KEY);
+          _startPolling(tok);
           _checkSitePassword(tok, data.session);
         } else {
           _denyAndClear(data.reason || 'invalid_token');
